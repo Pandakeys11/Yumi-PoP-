@@ -15,6 +15,39 @@ body {
     box-shadow: 0 0 20px rgba(68, 0, 0, 0.5); /* Matching shadow */
 }
 
+#score-display {
+    position: absolute; /* Position above the canvas */
+    top: 10px; /* Adjust as needed */
+    left: 10px; /* Adjust as needed */
+    font-size: 20px;
+    color: #ffcc00; /* Gold/yellow for score */
+    padding: 10px;
+    z-index: 10; /* Ensure it's above the canvas */
+    font-family: monospace;
+}
+
+#game-controls {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px; /* Space between buttons */
+    z-index: 10; /* Ensure it's above the canvas */
+}
+
+#game-controls button {
+    padding: 8px 12px;
+    border: none;
+    background-color: #440000; /* Dark red button background */
+    color: #f0f0f0; /* Light text */
+    cursor: pointer;
+    font-size: 16px;
+}
+
+#game-controls button:hover {
+    background-color: #660000; /* Darker red on hover */
+}
 #gameCanvas {
     background-color: #333; /* Placeholder canvas background */
     display: block;

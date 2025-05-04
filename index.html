@@ -8,22 +8,25 @@
     <!-- WalletConnect CSS if needed -->
 </head>
 <body>
-    <div class="game-container">
-        <canvas id="gameCanvas"></canvas>
+        <div class="game-container">
+                <canvas id="gameCanvas"></canvas>
         <div id="score-display"></div>
-        <div class="ui-panel">
-            <h1>Dark Fantasy Game</h1>
-            <div id="walletConnectArea">
-                <!-- WalletConnect button/widget will go here -->
-                <p>Connect your wallet:</p>
-                <button id="connectWalletButton">Connect Wallet</button>
-                <p id="walletAddressDisplay"></p>
-            </div>
-            <div id="playerStats">
-                <!-- Player username, stats linked to wallet -->
-                <p>Username: Guest</p>
-                <p>Stats: Loading...</p>
-            </div>
+        <div id="game-controls">
+            <button id="start-button">Start Game</button>
+            <button id="pause-button">Pause Game</button>
+            <button id="restart-button">Restart Game</button>
+        </div>
+            <div class="ui-panel">
+                <h1>Dark Fantasy Game</h1>
+                <div id="walletConnectArea">
+                    <p>Connect your wallet:</p>
+                    <button id="connectWalletButton">Connect Wallet</button>
+                    <p id="walletAddressDisplay"></p>
+                </div>
+                <div id="playerStats">
+                    <p>Username: Guest</p>
+                    <p>Stats: Loading...</p>
+                </div>
         </div>
     </div>
 

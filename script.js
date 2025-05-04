@@ -1,10 +1,32 @@
 document.addEventListener('DOMContentLoaded', async () => {
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-
-    // Initialize the score
-    let score = 0;
-
+    // Object to store explosion asset images
+    const explosionAssets = {};
+    // Player asset
+    let playerAsset = new Image();
+    // Enemy asset
+    let enemyAsset = new Image();
+    // Bomb asset
+    let bombAsset = new Image();
+    // Indestructible tile asset
+    let indestructibleTileAsset = new Image();
+    // Destructible tile asset
+    let destructibleTileAsset = new Image();
+    // Object to store power-up assets
+    const powerupAssets = {}; // e.g., { 'bombRadius': Image, 'bombCount': Image, 'speed': Image }
+    
+        // Counter for loaded assets
+    let loadedAssets = 0;
+    const totalAssets = 10; // Adjust based on total number of assets
+    
+   
+    // UI Elements
+    const scoreDisplay = document.getElementById('score-display');
+    const startButton = document.getElementById('start-button');
+    const pauseButton = document.getElementById('pause-button');
+    const restartButton = document.getElementById('restart-button');
+    let requestID = null;
 
     // Game Constants
     const GRID_SIZE = 15; // e.g., 15x15 grid
@@ -33,13 +55,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     const SPEED_INCREASE = 0.5; // Amount to increase player speed
 
     // Game State
-    const gameState = {
+    const initialState = {
         player: null,
         bombs: [],
         explosions: [], // To manage active explosion animations
         enemies: [],
-
         powerups: [],
+        difficultyLevel: 1, // Initialize difficulty level to 1
+        score: 0, // Initialize score to 0
+        gameMap: [], // Initialize game map to an empty array
+        currentState: 'menu', // 'menu', 'playing', 'paused', 'gameOver', 'gameWon'
+        gameStarted: false,
+        gameOver: false,
+        gameWon: false,
+        overlayAlpha: 0
+        assetsLoaded: false
+    };
+
+    const gameState = {
+        ...initialState,
         difficultyLevel: 1, // Initialize difficulty level to 1
         gameStarted: false,
         gameOver: false,
@@ -84,12 +118,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
     }
 
-    // Update the score
-    function updateScore(points) {
-        score += points;
-        const scoreDisplay = document.getElementById('score-display');
-        if (scoreDisplay) scoreDisplay.textContent = `Score: ${score}`;
-    }
 
      // Explosion Object
     function createExplosion(gridX, gridY) {
@@ -100,7 +128,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             duration: EXPLOSION_DURATION
         };
     }
-
 
     // Enemy Object (Simple object)
     function createEnemy(gridX, gridY) {
@@ -205,34 +232,61 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Place a bomb
-    function placeBomb(gridX, gridY, power, plantedBy) {
+     function placeBomb(gridX, gridY, power, plantedBy) {
+         // Check if a bomb already exists at the current grid position
+         if (gameState.bombs.some(bomb => bomb.gridX === gridX && bomb.gridY === gridY)) {
+             return; // Don't create a new bomb if one exists
+         }
         const newBomb = createBomb(gridX, gridY, power, plantedBy);
         gameState.bombs.push(newBomb);
         plantedBy.bombsAvailable--;
         console.log(`Bomb planted at ${gridX}, ${gridY}. Bombs available: ${plantedBy.bombsAvailable}`);
     }
-
-    // Explode a bomb
+     // Explode a bomb
     function explodeBomb(bomb) {
+
         bomb.state = 'exploding';
         console.log(`Bomb exploding at ${bomb.gridX}, ${bomb.gridY} with power ${bomb.power}`);
-
-        // Create explosion effects (center)
-        gameState.explosions.push(createExplosion(bomb.gridX, bomb.gridY));
-
-
         // Create explosion effects (radius)
         const explosionTiles = getExplosionTiles(bomb.gridX, bomb.gridY, bomb.power);
-        explosionTiles.forEach(tile => {
-            // Avoid adding duplicate explosion effects on the same tile
-             if (!gameState.explosions.some(exp => exp.gridX === tile.x && exp.gridY === tile.y)) {
-                 gameState.explosions.push(createExplosion(tile.x, tile.y));
-             }
+        
+        // Create center explosion object
+        gameState.explosions.push({ gridX: bomb.gridX, gridY: bomb.gridY, type: 'center', timer: EXPLOSION_DURATION });
 
+        // Directions: up, down, left, right
+        const directions = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+
+        // Iterate through directions and create explosions
+        directions.forEach(dir => {
+            for (let i = 1; i <= bomb.power; i++) {
+                const tileX = bomb.gridX + dir[0] * i;
+                const tileY = bomb.gridY + dir[1] * i;
+
+                // Check bounds
+                if (tileX >= 0 && tileX < GRID_SIZE && tileY >= 0 && tileY < GRID_SIZE) {
+                    const tileType = gameState.gameMap[tileY][tileX];
+                    let explosionType = '';
+                    
+                    // Determine explosion type
+                    if (dir[0] === 0 && dir[1] === -1) explosionType = (i === bomb.power || tileType !== TILE_EMPTY && tileType !== TILE_DESTRUCTIBLE) ? 'end-up' : 'vertical';
+                    if (dir[0] === 0 && dir[1] === 1) explosionType = (i === bomb.power || tileType !== TILE_EMPTY && tileType !== TILE_DESTRUCTIBLE) ? 'end-down' : 'vertical';
+                    if (dir[0] === -1 && dir[1] === 0) explosionType = (i === bomb.power || tileType !== TILE_EMPTY && tileType !== TILE_DESTRUCTIBLE) ? 'end-left' : 'horizontal';
+                    if (dir[0] === 1 && dir[1] === 0) explosionType = (i === bomb.power || tileType !== TILE_EMPTY && tileType !== TILE_DESTRUCTIBLE) ? 'end-right' : 'horizontal';
+
+                    // Explosion stops at indestructible blocks
+                    if (tileType === TILE_INDESTRUCTIBLE) break;
+
+                    gameState.explosions.push({ gridX: tileX, gridY: tileY, type: explosionType, timer: EXPLOSION_DURATION });
+
+                    // Explosion stops after hitting a destructible block (it destroys the block, but doesn't go through)
+                    if (tileType === TILE_DESTRUCTIBLE) {
+                         gameState.gameMap[tileY][tileX] = TILE_EMPTY;
+                         break;
+                    }
             // Handle destroying destructible blocks
             if (gameState.gameMap[tile.y][tile.x] === TILE_DESTRUCTIBLE) {
                     gameState.gameMap[tile.y][tile.x] = TILE_EMPTY;
-                    console.log(`Destroyed block at ${tile.x}, ${tile.y}`);
+                console.log(`Destroyed block at ${tile.x}, ${tile.y}`);
             }        
         if (bomb.plantedBy) {
                // Add a small chance to create a power-up at the destroyed block's position
@@ -243,9 +297,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             // Function to create a power-up
     function createPowerup(gridX, gridY, type) {
+         if (gameState.powerups.length >= 3) {
+                  console.log(`Powerup ignored`);
+                  return;}
         const powerup = { gridX, gridY, type };
-        gameState.powerups.push(powerup);
-    }
+        gameState.powerups.push(powerup); }
 
 
 
@@ -259,23 +315,122 @@ document.addEventListener('DOMContentLoaded', async () => {
             
              // Check for collisions with player and enemies
             if (gameState.player && !gameState.gameOver) {
-                const playerGridX = Math.floor(gameState.player.x / TILE_SIZE);
-                const playerGridY = Math.floor(gameState.player.y / TILE_SIZE);
-                if (explosionTiles.some(tile => tile.x === playerGridX && tile.y === playerGridY)) {
-                    // TODO: Implement player hit by explosion - game over
-                    console.log('Player hit by explosion!');
-                    gameState.gameOver = true;
-                    // Stop game loop or show game over screen
-                }
+                 // Iterate through explosion objects
+                  gameState.explosions.forEach(explosion => {
+                 if (explosion.gridX === gameState.player.gridX && explosion.gridY === gameState.player.gridY) {
+                        // Player is in the same grid tile as an explosion
+                        console.log('Player hit by explosion!');
+                        gameState.gameOver = true;
+                        // Stop game loop or show game over screen
+                 }
+            });
             }
 
+
+                
+               
+             // Check for enemy collisions
             gameState.enemies.forEach(enemy => {
-                const enemyGridX = Math.floor(enemy.x / TILE_SIZE);
-                const enemyGridY = Math.floor(enemy.y / TILE_SIZE);
-                if (explosionTiles.some(tile => tile.x === enemyGridX && tile.y === enemyGridY)) {
-                    // TODO: Implement enemy hit by explosion - remove enemy
-                }
+                     // Iterate through explosion objects
+                      gameState.explosions.forEach(explosion => {
+                        // Check if the enemy is in the same grid tile as the current explosion object
+                        if (enemy.gridX === explosion.gridX && enemy.gridY === explosion.gridY) {
+                           console.log('Enemy hit by explosion!');
+                          enemy.alive = false; // Or similar logic to handle enemy death
+                       }
+                   });
+               
+                 
+               
             });
+             // Check for chain reactions
+             for (let i = gameState.bombs.length - 1; i >= 0; i--) {
+                 const adjacentBomb = gameState.bombs[i];
+                 if (adjacentBomb !== bomb && adjacentBomb.state === 'active' && explosionTiles.some(tile => tile.x === adjacentBomb.gridX && tile.y === adjacentBomb.gridY)) {
+                     adjacentBomb.state = 'exploding'; // Set the state to exploding
+                     explodeBomb(adjacentBomb);
+                 }
+             }
+
+           }
+
+         }
+
+         // Function to load all assets
+    function loadAssets() {
+         // Explosion assets
+         const explosionImagePaths = {
+             'center': 'assets/explosion_center.png', // Replace with your image paths
+             'horizontal': 'assets/explosion_horizontal.png', // Replace with your image paths
+             'vertical': 'assets/explosion_vertical.png', // Replace with your image paths
+             'end-up': 'assets/explosion_end_up.png', // Replace with your image paths
+             'end-down': 'assets/explosion_end_down.png', // Replace with your image paths
+             'end-left': 'assets/explosion_end_left.png', // Replace with your image paths
+             'end-right': 'assets/explosion_end_right.png' // Replace with your image paths
+         };
+        for (const type in explosionImagePaths) {
+             const img = new Image();
+             img.src = explosionImagePaths[type];
+             img.onload = () => {
+                  explosionAssets[type] = img;
+                 loadedAssets++;
+                 if (loadedAssets === totalAssets) {
+                     gameState.assetsLoaded = true;
+                      gameState.currentState = 'menu';
+                 }
+             };
+         }
+
+         // Player asset
+         playerAsset.src = 'assets/player.png'; // Replace with your image path
+         playerAsset.onload = () => {
+             loadedAssets++;
+              if (loadedAssets === totalAssets) {
+                  gameState.assetsLoaded = true;
+                   gameState.currentState = 'menu';
+             }
+         };
+         // Enemy asset
+         enemyAsset.src = 'assets/enemy.png'; // Replace with your image path
+         enemyAsset.onload = () => {
+             loadedAssets++;
+              if (loadedAssets === totalAssets) {
+                 gameState.assetsLoaded = true;
+                  gameState.currentState = 'menu';
+             }
+         };
+         // Bomb asset
+         bombAsset.src = 'assets/bomb.png'; // Replace with your image path
+         bombAsset.onload = () => {
+             loadedAssets++;
+              if (loadedAssets === totalAssets) {
+                  gameState.assetsLoaded = true;
+                   gameState.currentState = 'menu';
+             }
+         };
+         // Indestructible tile asset
+         indestructibleTileAsset.src = 'assets/indestructible_tile.png'; // Replace with your image path
+         indestructibleTileAsset.onload = () => {
+              loadedAssets++;
+              if (loadedAssets === totalAssets) {
+                  gameState.assetsLoaded = true;
+                   gameState.currentState = 'menu';
+             }
+         };
+         // Destructible tile asset
+         destructibleTileAsset.src = 'assets/destructible_tile.png'; // Replace with your image path
+         destructibleTileAsset.onload = () => {
+             loadedAssets++;
+              if (loadedAssets === totalAssets) {
+                  gameState.assetsLoaded = true;
+                   gameState.currentState = 'menu';
+             }
+         };
+         // Power-up assets (add more power-up types as needed)
+         powerupAssets[POWERUP_BOMB_RADIUS] = new Image(); powerupAssets[POWERUP_BOMB_RADIUS].src = 'assets/powerup_bomb_radius.png';
+         powerupAssets[POWERUP_BOMB_COUNT] = new Image(); powerupAssets[POWERUP_BOMB_COUNT].src = 'assets/powerup_bomb_count.png';
+         powerupAssets[POWERUP_SPEED] = new Image(); powerupAssets[POWERUP_SPEED].src = 'assets/powerup_speed.png';
+    }
 
     }
 
@@ -318,7 +473,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Game Update Logic
     function update() {
-        if (!gameState.gameStarted || gameState.gameOver) return; // Stop updates if game over
+        if (gameState.currentState !== 'playing') return;
 
         handleInput();
 
@@ -374,7 +529,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (powerup.gridX === gameState.player.gridX && powerup.gridY === gameState.player.gridY) {
                 // Apply power-up effect
                 switch (powerup.type) {
-                    case POWERUP_BOMB_RADIUS:
+                 case POWERUP_BOMB_RADIUS:
                         gameState.player.bombPower++;
                         break;
                     case POWERUP_BOMB_COUNT:
@@ -392,11 +547,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
          // Update explosions (check duration and remove)
-         for (let i = gameState.explosions.length - 1; i >= 0; i--) {
+        for (let i = gameState.explosions.length - 1; i >= 0; i--) {
              const explosion = gameState.explosions[i];
-             if (currentTime - explosion.startTime >= explosion.duration) {
-                 gameState.explosions.splice(i, 1); // Remove explosion
-             }
+             explosion.timer -= 1000/60;// Decrease timer (assuming ~60 FPS)
+              if (explosion.timer <= 0) gameState.explosions.splice(i, 1); // Remove if timer is up
+        
          }
 
         // --- Collision Checks ---
@@ -404,14 +559,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Player-Explosion Collision
          if (gameState.player && gameState.player.alive && gameState.explosions.some(exp =>
              exp.gridX === gameState.player.gridX && exp.gridY === gameState.player.gridY
-         )) {
-             console.log("Player hit by explosion! Game Over!");
-             gameState.player.alive = false;
-            gameState.gameOver = true;
-                // Stop game loop or show game over screen
-             // TODO: Trigger game over sequence/visuals
-         }
-
+            )) {
+                console.log("Player hit by explosion! Game Over!");
+                gameState.player.alive = false;
+                gameState.gameOver = true;
+                   // Stop game loop or show game over screen
+                // TODO: Trigger game over sequence/visuals
+           }
+        
          // Enemy-Explosion Collision (already handled in explodeBomb, but could be checked here too)
          // We already iterate through enemies in explodeBomb for immediate effect. Keeping it there is fine.
 
@@ -423,6 +578,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                      gameState.player.alive = false;
                     gameState.gameOver = true;
                     // Stop game loop or show game over screen
+                }
+                
+                   if (gameState.gameOver || gameState.gameWon) {
+                    if (gameState.overlayAlpha < 1) {
+                     gameState.overlayAlpha += 0.01; // Increment gradually
+                      if (gameState.overlayAlpha > 1) gameState.overlayAlpha = 1; // Cap at 1
+                      }
+
                  }
                 
                 
@@ -436,6 +599,7 @@ document.addEventListener('DOMContentLoaded', async () => {
      // Function to increase the difficulty level
      function increaseDifficulty() {
          gameState.difficultyLevel++;
+         updateScoreDisplay(); // Update score display
          // TODO: Update enemy stats (or new enemies created will have higher stats)
          console.log(`Difficulty increased to level ${gameState.difficultyLevel}`);
      }
@@ -656,38 +820,101 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Game Rendering Logic
     function render() {
+         if (!canvas || !ctx) return;
+
         // Clear canvas
         ctx.fillStyle = '#1a1a1a'; // Match body background
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Draw game map and grid lines
+         // Draw based on game state
+         if (gameState.currentState === 'menu') {
+             // Show start menu
+             ctx.fillStyle = '#000';
+             ctx.font = '48px sans-serif';
+             ctx.textAlign = 'center';
+             ctx.fillText('Bomberman', canvas.width / 2, canvas.height / 2 - 50);
+
+             // Ensure only the start button is visible in the menu state
+             startButton.style.display = 'block';
+             pauseButton.style.display = 'none';
+             restartButton.style.display = 'none';
+             scoreDisplay.style.display = 'none';
+         } else if (gameState.currentState === 'playing') {
+             // Show the game elements
+             drawGameElements(ctx);
+             startButton.style.display = 'none';
+             pauseButton.style.display = 'block';
+             restartButton.style.display = 'block';
+             scoreDisplay.style.display = 'block';
+         } else if (gameState.currentState === 'paused') {
+             // Draw the game elements with a semi-transparent overlay and "Paused" text
+             drawGameElements(ctx);
+             ctx.globalAlpha = 0.5; // Set transparency for overlay
+             ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; // Semi-transparent black overlay
+             ctx.fillRect(0, 0, canvas.width, canvas.height);
+             ctx.globalAlpha = 1.0; // Reset transparency
+             ctx.fillStyle = '#fff';
+             ctx.font = '48px sans-serif';
+             ctx.textAlign = 'center';
+             ctx.fillText('Paused', canvas.width / 2, canvas.height / 2);
+             ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; // Semi-transparent black overlay
+             ctx.fillRect(0, 0, canvas.width, canvas.height);
+             ctx.fillStyle = '#fff'; // White text
+             ctx.fillText('Paused', canvas.width / 2, canvas.height / 2);
+             startButton.style.display = 'none';
+             pauseButton.style.display = 'block';
+             restartButton.style.display = 'block';
+             scoreDisplay.style.display = 'block';
+         } else if (gameState.gameOver || gameState.gameWon) {
+             // Draw the game elements with the final state and show "Game Over" or "You Win!" text
+             drawGameElements(ctx);
+             startButton.style.display = 'none';
+               if (gameState.gameOver) {
+                 ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Semi-transparent black overlay
+                 ctx.fillRect(0, 0, canvas.width, canvas.height);
+                 ctx.fillStyle = '#fff'; // Red text
+                 ctx.font = '48px sans-serif';
+                 ctx.textAlign = 'center';
+                 ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2);
+                } else if (gameState.gameWon) {
+                   ctx.fillStyle = '#00ff00'; // Green text
+                   ctx.fillText('You Win!', canvas.width / 2, canvas.height / 2);
+             pauseButton.style.display = 'none';
+             restartButton.style.display = 'block';
+             scoreDisplay.style.display = 'block';
+         }
+
+     }
+
+     function drawGameElements(ctx) {
+            // Draw game map and grid lines
+
         for (let y = 0; y < GRID_SIZE; y++) {
             for (let x = 0; x < GRID_SIZE; x++) {
                 const tileType = gameState.gameMap[y][x];
-                if (tileType === TILE_INDESTRUCTIBLE) {
-                    ctx.fillStyle = '#555'; // Dark grey for indestructible blocks
-                    ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+               if (tileType === TILE_INDESTRUCTIBLE) {
+                    ctx.drawImage(indestructibleTileAsset, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
                 } else if (tileType === TILE_DESTRUCTIBLE) {
-                     ctx.fillStyle = '#8B4513'; // SaddleBrown for destructible blocks
-                     ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                    ctx.drawImage(destructibleTileAsset, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
                 }
                  // Draw grid lines for empty and block tiles
                  ctx.strokeStyle = '#333';
                  ctx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+              
             }
         }
 
         // Draw bombs
         gameState.bombs.forEach(bomb => {
             if (bomb.state === 'active') {
-                ctx.fillStyle = '#ff0000'; // Red for bomb
-                const bombCenterX = bomb.x + TILE_SIZE / 2;
-                const bombCenterY = bomb.y + TILE_SIZE / 2;
-                const bombRadius = TILE_SIZE * 0.3;
-                ctx.beginPath();
-                ctx.arc(bombCenterX, bombCenterY, bombRadius, 0, Math.PI * 2);
-                ctx.fill();
-                 const timeElapsed = Date.now() - bomb.startTime;
+               ctx.drawImage(bombAsset, bomb.x, bomb.y, TILE_SIZE, TILE_SIZE);
+               const timeElapsed = Date.now() - bomb.startTime;
+                  const bombCenterX = bomb.x + TILE_SIZE / 2;
+                  const bombCenterY = bomb.y + TILE_SIZE / 2;
+                  const bombRadius = TILE_SIZE * 0.3;
+                 //ctx.beginPath();
+                 //ctx.arc(bombCenterX, bombCenterY, bombRadius, 0, Math.PI * 2);
+                 //ctx.fill();
                  const timerProgress = timeElapsed / BOMB_TIMER;
                  const indicatorSize = TILE_SIZE * 0.6 * (1 - timerProgress);
                  ctx.fillStyle = '#ffff00'; // Yellow indicator
@@ -696,80 +923,94 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         
         // Draw explosions
-        gameState.bombs.forEach(bomb => {
-            if (bomb.state === 'exploding') {
-                // Draw center explosion tile
-                 ctx.fillStyle = '#FFA500';
-                 ctx.fillRect(bomb.gridX * TILE_SIZE, bomb.gridY * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-
-                // Draw explosion tiles in radius
-                const explosionTiles = getExplosionTiles(bomb.gridX, bomb.gridY, bomb.power);
-                explosionTiles.forEach(tile => {
-                    ctx.fillStyle = '#FFA500';
-                    ctx.fillRect(tile.x * TILE_SIZE, tile.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-                });
-            }
+        gameState.explosions.forEach(explosion => {
+               ctx.drawImage(explosionAssets[explosion.type], explosion.gridX * TILE_SIZE, explosion.gridY * TILE_SIZE, TILE_SIZE, TILE_SIZE);
         });
 
 
         // Draw enemies
         gameState.enemies.forEach(enemy => {
             if (enemy.alive) {
-                ctx.fillStyle = enemy.color; // Magenta for enemy
-                const enemySize = enemy.size;
-                const enemyRenderX = enemy.x + (TILE_SIZE - enemySize) / 2;
-                const enemyRenderY = enemy.y + (TILE_SIZE - enemySize) / 2;
-                ctx.fillRect(enemyRenderX, enemyRenderY, enemySize, enemySize);
+                 ctx.drawImage(enemyAsset, enemy.x, enemy.y, TILE_SIZE, TILE_SIZE);
             }
         });
 
         // Draw player (draw player last so they are on top of other objects)
         if (gameState.player && gameState.player.alive) {
-            ctx.fillStyle = gameState.player.color;
-            const playerSize = gameState.player.size;
-            const playerRenderX = gameState.player.x + (TILE_SIZE - playerSize) / 2;
-            const playerRenderY = gameState.player.y + (TILE_SIZE - playerSize) / 2;
-            ctx.fillRect(playerRenderX, playerRenderY, playerSize, playerSize);
+             ctx.drawImage(playerAsset, gameState.player.x, gameState.player.y, TILE_SIZE, TILE_SIZE);
         }
-        /* gameState.explosions.forEach(explosion => {
-             ctx.fillStyle = '#FFA500'; // Orange for explosion
-             ctx.fillRect(explosion.gridX * TILE_SIZE, explosion.gridY * TILE_SIZE, TILE_SIZE, TILE_SIZE); // Draw over the explosion tile
-         });
 
-         // Draw enemies
-         gameState.enemies.forEach(enemy => {
-             if (enemy.alive) {
-                 ctx.fillStyle = enemy.color; // Magenta for enemy
-                 const enemySize = enemy.size;
-                 const enemyRenderX = enemy.x + (TILE_SIZE - enemySize) / 2;
-                 const enemyRenderY = enemy.y + (TILE_SIZE - enemySize) / 2;
-                 ctx.fillRect(enemyRenderX, enemyRenderY, enemySize, enemySize);
-             }
-         });
-         */
 
-        // Draw game over screen/message
-         if (gameState.gameOver) {
-             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Semi-transparent black overlay
-             ctx.fillRect(0, 0, canvas.width, canvas.height);
-             ctx.fillStyle = '#ff0000'; // Red text
-             ctx.font = '48px sans-serif';
-             ctx.textAlign = 'center';
-             ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2);
+         // Draw power-ups
+           gameState.powerups.forEach(powerup => {
+               ctx.drawImage(powerupAssets[powerup.type], powerup.gridX * TILE_SIZE, powerup.gridY * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+           });
          }
          // Draw game won screen/message
         if (gameState.gameWon) {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Semi-transparent black overlay
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#00ff00'; // Green text
+               ctx.fillStyle = '#00ff00'; // Green text
+               ctx.globalAlpha = gameState.overlayAlpha;
             ctx.fillText('You Win!', canvas.width / 2, canvas.height / 2);
+                  ctx.globalAlpha = 1.0;
+              gameState.currentState = 'gameWon';
         }
 
     }
 
     // Main Game Loop
     function gameLoop() {
+           requestID = null
+           requestID = requestAnimationFrame(gameLoop);
+        if (gameState.currentState !== 'playing') {
+            render(); // Only render the UI if not playing
+            requestAnimationFrame(gameLoop);
+            return;
+        }
         update();
+        render();
+    
+          if (requestID === null) {
+             requestID = requestAnimationFrame(gameLoop);
+          }
+
+    }
+
+    // --- Game State Management Functions ---
+
+    function startGame() {
+        // Initialize the game state
+        gameState.currentState = 'playing';
+        // Initialize the game state with the initial game state
+        Object.assign(gameState, {
+            ...initialState, // Copies all initial properties
+            currentState: 'playing' // Overrides the state to 'playing'
+        });
+        initializeGame();
+        updateScoreDisplay(); // Update the score display to the initial value
+    }
+
+    function pauseGame() {
+        if (gameState.currentState === 'playing') {
+            gameState.currentState = 'paused';
+              if (requestID !== null) {
+               cancelAnimationFrame(requestID);
+               requestID = null;
+        } else if (gameState.currentState === 'paused') {
+            gameState.currentState = 'playing';
+        }
+         render();
+    }
+
+    function restartGame() {
+        gameState.currentState = 'menu';
+        startGame();
+      
+         // Reset the score
+         gameState.score = 0;
+        updateScoreDisplay(); // Update the score display
+        update()
         render();
         requestAnimationFrame(gameLoop);
     }
@@ -844,8 +1085,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- Game Initialization ---
+    // Initialize the score display
+    updateScoreDisplay();
+    render(); // Render the menu
     function initializeGame() {
-         if (gameState.gameStarted) return; // Prevent double initialization
+         //if (gameState.gameStarted) return; // Prevent double initialization
 
          console.log("Initializing game...");
 
@@ -853,6 +1097,7 @@ document.addEventListener('DOMContentLoaded', async () => {
          gameState.bombs = [];
          gameState.explosions = [];
          gameState.enemies = [];
+          gameState.overlayAlpha = 0;
          gameState.gameOver = false; // Ensure game over is false at start
 
          // Generate a simple random-ish map with destructible blocks
@@ -891,8 +1136,10 @@ document.addEventListener('DOMContentLoaded', async () => {
              }
          }
          
-         }
 
+
+
+        loadAssets();
          gameState.gameStarted = true;
          console.log("Game initialized. Starting loop.");
          gameLoop();
@@ -931,5 +1178,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         return map;
     }
+
+     // Function to update the score display
+     function updateScoreDisplay() {
+         if (scoreDisplay) scoreDisplay.textContent = `Score: ${gameState.score}`;
+     }
+
+    // --- UI Interactions ---
+     // Hook up button events
+    if (startButton) {
+         startButton.addEventListener('click', startGame);
+     }
+     if (pauseButton) {
+         pauseButton.addEventListener('click', pauseGame);
+     }
+     if (restartButton) {
+         restartButton.addEventListener('click', restartGame);
+     }
+
+
+     // Initialize the game with the 'menu' state
+     gameState.currentState = 'menu';
+
+
+
 
 });
