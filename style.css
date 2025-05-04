@@ -1,87 +1,240 @@
-body {
+:root {
+    --primary-color: #2c1810;
+    --secondary-color: #4a2b1f;
+    --accent-color: #8b4513;
+    --text-color: #e0d0c1;
+    --danger-color: #ff4444;
+    --success-color: #44ff44;
+}
+
+* {
     margin: 0;
-    background-color: #1a1a1a; /* Dark background */
-    color: #f0f0f0; /* Light text */
-    font-family: sans-serif; /* Placeholder font */
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #121212; /* Dark background */
+    color: #e0e0e0; /* Light text */
+    margin: 0;
+    padding: 0;
     display: flex;
-    justify-content: center;
-    align-items: center;
+    flex-direction: column; /* Stack top panel and game container */
+    align-items: center; 
     min-height: 100vh;
 }
 
-.game-container {
-    display: flex;
-    border: 2px solid #440000; /* Dark red border */
-    box-shadow: 0 0 20px rgba(68, 0, 0, 0.5); /* Matching shadow */
+canvas {
+    border: 2px solid #00ffff; /* Cyan border */
+    background-color: #222228; /* Match floor color initially */
 }
 
+/* Top Control Panel */
+#top-panel {
+    width: 90%;
+    max-width: 1000px; /* Limit width */
+    background-color: #1a1a1a; /* Very dark */
+    border: 1px solid #404050; /* Subtle border */
+    border-radius: 5px;
+    padding: 10px 20px;
+    margin: 20px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.3); /* Cyan glow */
+}
+
+#game-stats {
+    display: flex;
+    align-items: center;
+    gap: 20px; /* Space between stats */
+    font-size: 1.1em;
+}
+
+#lives-display,
 #score-display {
-    position: absolute; /* Position above the canvas */
-    top: 10px; /* Adjust as needed */
-    left: 10px; /* Adjust as needed */
-    font-size: 20px;
-    color: #ffcc00; /* Gold/yellow for score */
-    padding: 10px;
-    z-index: 10; /* Ensure it's above the canvas */
-    font-family: monospace;
+     color: #ffffff; /* White values */
+     font-weight: bold;
 }
 
-#game-controls {
-    position: absolute;
-    bottom: 10px;
-    left: 50%;
-    transform: translateX(-50%);
+#inventory-display {
     display: flex;
-    gap: 10px; /* Space between buttons */
-    z-index: 10; /* Ensure it's above the canvas */
+    align-items: center;
+    gap: 8px;
+    border-left: 1px solid #404050;
+    padding-left: 15px;
 }
 
-#game-controls button {
-    padding: 8px 12px;
-    border: none;
-    background-color: #440000; /* Dark red button background */
-    color: #f0f0f0; /* Light text */
-    cursor: pointer;
-    font-size: 16px;
+#inventory-display span:first-child { /* "Inventory:" text */
+    color: #cccccc; 
+    font-weight: normal;
 }
 
-#game-controls button:hover {
-    background-color: #660000; /* Darker red on hover */
-}
-#gameCanvas {
-    background-color: #333; /* Placeholder canvas background */
-    display: block;
-}
-
-.ui-panel {
-    width: 300px; /* Example width */
-    padding: 20px;
-    background-color: #330000; /* Darker red/brown for UI */
-    border-left: 2px solid #440000;
+.inv-item { /* Styles for S: 0, B: 0, R: 0 */
+    background-color: #333;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.9em;
+    color: #fff;
 }
 
-h1 {
-    color: #ffcc00; /* Gold/yellow title */
-    text-align: center;
+#game-action-buttons {
+    display: flex;
+    gap: 10px;
 }
 
-#walletConnectArea, #playerStats {
-    margin-top: 20px;
-    padding: 15px;
-    border: 1px solid #440000;
-    background-color: #220000;
-}
-
-#connectWalletButton {
-    padding: 10px;
-    background-color: #ffcc00;
-    color: #330000;
-    border: none;
+#game-action-buttons button {
+    background-color: #1f1f1f;
+    color: #00ffff; /* Cyan text */
+    border: 1px solid #00ffff;
+    padding: 8px 15px;
+    border-radius: 5px;
     cursor: pointer;
     font-size: 1em;
+    transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+#game-action-buttons button:hover {
+    background-color: #00ffff;
+    color: #121212;
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.7);
+}
+
+/* Main Game Area */
+.game-container {
+    display: flex; /* Arrange canvas and ui-panel side-by-side */
+    justify-content: center; 
+    align-items: flex-start; /* Align items to the top */
+    gap: 20px; /* Space between canvas and UI panel */
+    width: 90%;
+    max-width: 1200px; /* Adjust as needed */
+}
+
+/* Right Side UI Panel */
+.ui-panel {
+    background-color: #1a1a1a;
+    border: 1px solid #404050;
+    border-radius: 5px;
+    padding: 20px;
+    width: 250px; /* Fixed width */
+    box-shadow: 0 0 8px rgba(255, 0, 255, 0.3); /* Magenta glow */
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.panel-title {
+    color: #00ffff; /* Cyan */
+    text-align: center;
+    margin: 0 0 15px 0;
+    font-size: 1.5em;
+    border-bottom: 1px solid #404050;
+    padding-bottom: 10px;
+}
+
+.panel-section {
+    border-bottom: 1px dashed #404050;
+    padding-bottom: 15px;
+}
+.panel-section:last-child {
+    border-bottom: none;
+}
+
+.panel-section h2 {
+    color: #e0115f; /* Ruby/Magenta */
+    font-size: 1.2em;
+    margin: 0 0 10px 0;
+}
+
+#walletConnectArea button,
+.modal-content button { /* Style wallet and modal buttons similarly */
+    background-color: #3a003a; /* Dark Magenta */
+    color: #ff77ff; /* Light Magenta */
+    border: 1px solid #ff00ff;
+    padding: 8px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    width: 100%; /* Make buttons fill width */
+    margin-top: 10px;
+    transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+#walletConnectArea button:hover,
+.modal-content button:hover {
+    background-color: #ff00ff;
+    color: #121212;
+    box-shadow: 0 0 15px rgba(255, 0, 255, 0.7);
+}
+
+#walletAddressDisplay,
+#playerStats p,
+.theme-reference p {
+    color: #cccccc; /* Light gray for text */
+    font-size: 0.9em;
+    margin: 5px 0;
+}
+
+#walletAddressDisplay {
+    word-wrap: break-word; /* Wrap long addresses */
+}
+
+.theme-reference .orb-colors {
+    display: flex;
+    gap: 5px;
     margin-top: 10px;
 }
 
-#connectWalletButton:hover {
-    background-color: #ffe066;
+.theme-reference .orb-colors span {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px solid #555;
 }
+
+/* Modals */
+.modal {
+    display: none; 
+    position: fixed; 
+    z-index: 1; 
+    left: 0;
+    top: 0;
+    width: 100%; 
+    height: 100%; 
+    overflow: auto; 
+    background-color: rgba(0,0,0,0.7); /* Darker overlay */
+}
+
+.modal-content {
+    background-color: #1a1a1a; 
+    margin: 15% auto; 
+    padding: 30px;
+    border: 1px solid #ff00ff; /* Magenta border */
+    width: 80%; 
+    max-width: 400px;
+    border-radius: 8px;
+    text-align: center;
+    box-shadow: 0 0 20px rgba(255, 0, 255, 0.5);
+}
+
+.modal-content h2 {
+    color: #00ffff; /* Cyan title */
+    margin-top: 0;
+}
+
+.modal-content p {
+     color: #cccccc; 
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .game-container {
+        flex-direction: column;
+    }
+    
+    .ui-panel {
+        min-width: auto;
+    }
+} 

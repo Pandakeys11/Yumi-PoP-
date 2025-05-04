@@ -3,30 +3,84 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dark Fantasy Bomber-like</title>
+    <title>Dark Fantasy Bomber</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Preload key initial sprites (optional, but corrected paths) -->
+    <link rel="preload" href="assets/sprites/player/idle.png" as="image">
+    <link rel="preload" href="assets/sprites/tiles/floor.png" as="image">
+    <link rel="preload" href="assets/sprites/tiles/wall.png" as="image">
+    <link rel="preload" href="assets/sprites/tiles/destructible.png" as="image">
     <!-- WalletConnect CSS if needed -->
 </head>
 <body>
-        <div class="game-container">
-                <canvas id="gameCanvas"></canvas>
-        <div id="score-display"></div>
-        <div id="game-controls">
+
+    <!-- NEW: Top Control Panel -->
+    <div id="top-panel">
+        <div id="game-stats">
+            <span id="score-display">Score: 0</span>
+            <span id="lives-display">Lives: 3</span>
+            <div id="inventory-display">
+                <span>Inventory:</span>
+                <!-- Icons will be styled placeholders or added via JS if complex -->
+                <span class="inv-item" id="inv-speed">S: 0</span> 
+                <span class="inv-item" id="inv-bomb">B: 0</span>
+                <span class="inv-item" id="inv-range">R: 0</span>
+            </div>
+        </div>
+        <div id="game-action-buttons">
             <button id="start-button">Start Game</button>
             <button id="pause-button">Pause Game</button>
             <button id="restart-button">Restart Game</button>
         </div>
-            <div class="ui-panel">
-                <h1>Dark Fantasy Game</h1>
-                <div id="walletConnectArea">
-                    <p>Connect your wallet:</p>
-                    <button id="connectWalletButton">Connect Wallet</button>
-                    <p id="walletAddressDisplay"></p>
-                </div>
-                <div id="playerStats">
-                    <p>Username: Guest</p>
-                    <p>Stats: Loading...</p>
-                </div>
+    </div>
+
+    <!-- Main Game Area -->
+    <div class="game-container">
+        <canvas id="gameCanvas"></canvas>
+        
+        <!-- Right Side UI Panel (Structure adjusted slightly) -->
+        <div class="ui-panel">
+            <h1 class="panel-title">Dark Fantasy Bomber</h1> 
+            <div id="walletConnectArea" class="panel-section">
+                <h2>Wallet</h2>
+                <button id="connectWalletButton">Connect Wallet</button>
+                <p id="walletAddressDisplay">(Not Connected)</p>
+            </div>
+            <div id="playerStats" class="panel-section">
+                 <h2>Status</h2>
+                 <p id="game-status-display">Running: false, Paused: false</p>
+                 <!-- Add other stats here if needed -->
+            </div>
+             <div class="panel-section theme-reference">
+                 <h2>Theme Ref</h2>
+                 <p>Inspired by YUMI Orbs</p>
+                 <div class="orb-colors">
+                     <span style="background-color: #00ced1;"></span> <!-- Yumi -->
+                     <span style="background-color: #e0115f;"></span> <!-- Kage -->
+                     <span style="background-color: #2ecc71;"></span> <!-- Omega -->
+                     <span style="background-color: #b0b0b0;"></span> <!-- Solus -->
+                     <span style="background-color: #ffae42;"></span> <!-- Murk (Example Gold) -->
+                 </div>
+             </div>
+        </div>
+        <!-- Old game controls removed -->
+        <!-- <div id="game-controls"> ... buttons moved ... </div> -->
+    </div>
+
+    <!-- Game Over Modal -->
+    <div id="gameOverModal" class="modal">
+        <div class="modal-content">
+            <h2 id="gameOverTitle">Game Over</h2>
+            <p id="gameOverMessage"></p>
+            <button id="playAgainButton">Play Again</button>
+        </div>
+    </div>
+
+    <!-- Level Complete Modal (Added) -->
+    <div id="levelCompleteModal" class="modal">
+        <div class="modal-content">
+            <h2 id="levelCompleteText">Level Complete!</h2>
+            <!-- No button needed, auto-advances -->
         </div>
     </div>
 
@@ -34,6 +88,15 @@
     <script src="https://unpkg.com/@walletconnect/web3modal@1.7.8/dist/index.umd.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 
-    <script src="script.js"></script>
+    <!-- Game scripts (Corrected Order and Added Missing) -->
+    <script src="js/sprite_manager.js"></script>
+    <!-- <script src="js/game_objects/level_designs.js"></script> --> <!-- Removed - Using procedural generation -->
+    <script src="js/game_objects/player.js"></script>
+    <script src="js/game_objects/bomb.js"></script>
+    <script src="js/game_objects/enemy.js"></script>
+    <script src="js/game_objects/powerup.js"></script>
+    <script src="js/game_objects/level.js"></script>
+    <script src="js/wallet.js"></script>
+    <script src="js/script.js"></script>
 </body>
-</html>
+</html> 

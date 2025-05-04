@@ -1,0 +1,12 @@
+{
+  "name": "dark-fantasy-bomber",
+  "version": "1.0.0",
+  "description": "A dark fantasy themed bomber game with blockchain integration",
+  "main": "download_assets.js",
+  "scripts": {
+    "download-assets": "node download_assets.js"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.10"
+  }
+} 
