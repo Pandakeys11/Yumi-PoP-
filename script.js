@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize the score
     let score = 0;
 
+
     // Game Constants
     const GRID_SIZE = 15; // e.g., 15x15 grid
     const TILE_SIZE = canvas.width / GRID_SIZE;
@@ -16,11 +17,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     const INITIAL_BOMBS = 1; // Player starts with 1 bomb
     const BOMB_POWER = 1; // Initial explosion radius
     const ENEMY_SPEED = 2; // Pixels per frame for enemies
+    const ENEMY_DETECTION_RADIUS = 4;
+
 
     // Tile Types (for the map)
     const TILE_EMPTY = 0;
     const TILE_INDESTRUCTIBLE = 1;
     const TILE_DESTRUCTIBLE = 2;
+
+    // Power-up Types
+    const POWERUP_BOMB_RADIUS = 'bombRadius';
+    const POWERUP_BOMB_COUNT = 'bombCount';
+    const POWERUP_SPEED = 'speed';
+
+    const SPEED_INCREASE = 0.5; // Amount to increase player speed
 
     // Game State
     const gameState = {
@@ -28,9 +38,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         bombs: [],
         explosions: [], // To manage active explosion animations
         enemies: [],
+
+        powerups: [],
+        difficultyLevel: 1, // Initialize difficulty level to 1
         gameStarted: false,
-        gameOver: false, // Added game over state
-        gameMap: [] // Map will be generated or loaded
+        gameOver: false,
+        gameWon: false, // Added game won state
     };
 
     console.log('Game script loaded. Canvas and context obtained.');
@@ -66,7 +79,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             timer: BOMB_TIMER,
             power: power,
             plantedBy: plantedBy, // Reference to the player who planted it
-            exploded: false
+            state: 'active' // 'active', 'exploding', 'finished'
+
         };
     }
 
@@ -87,21 +101,42 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
     }
 
+
     // Enemy Object (Simple object)
     function createEnemy(gridX, gridY) {
+         // Calculate speed and detectionRadius based on difficulty level
+         const speed = ENEMY_SPEED * gameState.difficultyLevel * 0.1 + ENEMY_SPEED;
+         const detectionRadius = ENEMY_DETECTION_RADIUS * gameState.difficultyLevel * 0.1 + ENEMY_DETECTION_RADIUS;
+
+         // Randomly choose a starting direction
+         const directions = ['up', 'down', 'left', 'right'];
+         const initialDirection = directions[Math.floor(Math.random() * directions.length)];
+            // Initialize the state as 'patrolling'
         return {
+             // ... existing properties ...
             x: gridX * TILE_SIZE,
             y: gridY * TILE_SIZE,
+
+
+
+
+
             gridX: gridX,
             gridY: gridY,
             speed: ENEMY_SPEED,
-            size: TILE_SIZE * 0.7, // Slightly smaller than player
-            color: '#ff00ff', // Magenta for enemy
-            alive: true,
-             // Basic AI state (e.g., for random movement)
+
+             // direction
+             direction: initialDirection, // 'up', 'down', 'left', 'right'
+
+
+             // Basic AI state
              moveDirection: null, // 'up', 'down', 'left', 'right'
              movingTo: null,
-             targetX: gridX * TILE_SIZE,
+                 size: TILE_SIZE * 0.7, // Slightly smaller than player
+                 color: '#ff00ff', // Magenta for enemy
+                 alive: true,
+                  state: 'patrolling', // 'patrolling', 'chasing'
+                 detectionRadius: ENEMY_DETECTION_RADIUS, // How many tiles around to detect the player
              targetY: gridY * TILE_SIZE
         };
     }
@@ -179,11 +214,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Explode a bomb
     function explodeBomb(bomb) {
-        bomb.exploded = true;
+        bomb.state = 'exploding';
         console.log(`Bomb exploding at ${bomb.gridX}, ${bomb.gridY} with power ${bomb.power}`);
 
         // Create explosion effects (center)
         gameState.explosions.push(createExplosion(bomb.gridX, bomb.gridY));
+
 
         // Create explosion effects (radius)
         const explosionTiles = getExplosionTiles(bomb.gridX, bomb.gridY, bomb.power);
@@ -194,28 +230,53 @@ document.addEventListener('DOMContentLoaded', async () => {
              }
 
             // Handle destroying destructible blocks
-            if (gameState.gameMap[tile.y] && gameState.gameMap[tile.y][tile.x] === TILE_DESTRUCTIBLE) {
-                gameState.gameMap[tile.y][tile.x] = TILE_EMPTY;
-                console.log(`Destroyed block at ${tile.x}, ${tile.y}`);
-            }
-             // Handle hitting enemies
-             gameState.enemies.forEach(enemy => {
-                 if (enemy.alive && enemy.gridX === tile.x && enemy.gridY === tile.y) {
-                     console.log(`Enemy hit by explosion at ${tile.x}, ${tile.y}!`);
-                     enemy.alive = false;
-                     updateScore(100); // Increase the score when an enemy is hit
-                     // TODO: Add enemy removal/death animation. The enemy is removed in the update loop
-                 }
-             });
-        });
-
-        // Return bomb to player after the initial explosion logic
+            if (gameState.gameMap[tile.y][tile.x] === TILE_DESTRUCTIBLE) {
+                    gameState.gameMap[tile.y][tile.x] = TILE_EMPTY;
+                    console.log(`Destroyed block at ${tile.x}, ${tile.y}`);
+            }        
         if (bomb.plantedBy) {
+               // Add a small chance to create a power-up at the destroyed block's position
+               if (gameState.gameMap[tile.y][tile.x] === TILE_EMPTY && Math.random() < 0.2) { // 20% chance
+                const powerupTypes = [POWERUP_BOMB_RADIUS, POWERUP_BOMB_COUNT, POWERUP_SPEED];
+                const powerupType = powerupTypes[Math.floor(Math.random() * powerupTypes.length)];
+                createPowerup(tile.x, tile.y, powerupType);
+            }
+            // Function to create a power-up
+    function createPowerup(gridX, gridY, type) {
+        const powerup = { gridX, gridY, type };
+        gameState.powerups.push(powerup);
+    }
+
+
+
             bomb.plantedBy.bombsAvailable++;
+                
              console.log(`Bomb returned to player. Bombs available: ${bomb.plantedBy.bombsAvailable}`);
         }
 
         // Bomb object will be removed from gameState.bombs in the update loop after EXPLOSION_DURATION
+        bomb.state = 'finished';
+            
+             // Check for collisions with player and enemies
+            if (gameState.player && !gameState.gameOver) {
+                const playerGridX = Math.floor(gameState.player.x / TILE_SIZE);
+                const playerGridY = Math.floor(gameState.player.y / TILE_SIZE);
+                if (explosionTiles.some(tile => tile.x === playerGridX && tile.y === playerGridY)) {
+                    // TODO: Implement player hit by explosion - game over
+                    console.log('Player hit by explosion!');
+                    gameState.gameOver = true;
+                    // Stop game loop or show game over screen
+                }
+            }
+
+            gameState.enemies.forEach(enemy => {
+                const enemyGridX = Math.floor(enemy.x / TILE_SIZE);
+                const enemyGridY = Math.floor(enemy.y / TILE_SIZE);
+                if (explosionTiles.some(tile => tile.x === enemyGridX && tile.y === enemyGridY)) {
+                    // TODO: Implement enemy hit by explosion - remove enemy
+                }
+            });
+
     }
 
     // Calculate tiles affected by an explosion
@@ -298,10 +359,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Update bombs (check timers and explode)
         const currentTime = Date.now();
         for (let i = gameState.bombs.length - 1; i >= 0; i--) {
-            const bomb = gameState.bombs[i];
-            if (!bomb.exploded && currentTime - bomb.startTime >= bomb.timer) {
+             const bomb = gameState.bombs[i];
+             if (bomb.state === 'active' && currentTime - bomb.startTime >= bomb.timer) {
                 explodeBomb(bomb);
+             }
+         }
+
+          // Filter out finished bombs
+         gameState.bombs = gameState.bombs.filter(bomb => bomb.state !== 'finished');
+            
+           // Power-up Collection Logic
+           for (let i = gameState.powerups.length - 1; i >= 0; i--) {
+            const powerup = gameState.powerups[i];
+            if (powerup.gridX === gameState.player.gridX && powerup.gridY === gameState.player.gridY) {
+                // Apply power-up effect
+                switch (powerup.type) {
+                    case POWERUP_BOMB_RADIUS:
+                        gameState.player.bombPower++;
+                        break;
+                    case POWERUP_BOMB_COUNT:
+                        gameState.player.bombsAvailable++; // Increase max bombs
+                        break;
+                    case POWERUP_SPEED:
+                        gameState.player.speed += SPEED_INCREASE;
+                        break;
+                }
+                gameState.powerups.splice(i, 1); // Remove collected power-up
+                console.log(`Player collected a power-up: ${powerup.type}`);
             }
+        }
+
         }
 
          // Update explosions (check duration and remove)
@@ -320,7 +407,8 @@ document.addEventListener('DOMContentLoaded', async () => {
          )) {
              console.log("Player hit by explosion! Game Over!");
              gameState.player.alive = false;
-             gameState.gameOver = true;
+            gameState.gameOver = true;
+                // Stop game loop or show game over screen
              // TODO: Trigger game over sequence/visuals
          }
 
@@ -333,62 +421,235 @@ document.addEventListener('DOMContentLoaded', async () => {
                  if (enemy.alive && enemy.gridX === gameState.player.gridX && enemy.gridY === gameState.player.gridY) {
                      console.log("Player touched enemy! Game Over!");
                      gameState.player.alive = false;
-                     gameState.gameOver = true;
-                     // TODO: Trigger game over sequence/visuals
+                    gameState.gameOver = true;
+                    // Stop game loop or show game over screen
+                 }
+                
+                
+                 // Check for win condition (all enemies defeated)
+                  if (gameState.enemies.length === 0) {
+                     gameState.gameWon = true;
+                     // Stop game loop or show win screen
                  }
              });
          }
+     // Function to increase the difficulty level
+     function increaseDifficulty() {
+         gameState.difficultyLevel++;
+         // TODO: Update enemy stats (or new enemies created will have higher stats)
+         console.log(`Difficulty increased to level ${gameState.difficultyLevel}`);
+     }
 
-        // TODO: Implement enemy movement logic here
+
+         // Enemy Movement Logic
          gameState.enemies.forEach(enemy => {
-             if (enemy.alive && enemy.movingTo === null) {
-                 // Basic random movement for now
-                 const directions = [[0, -1, 'up'], [0, 1, 'down'], [-1, 0, 'left'], [1, 0, 'right']];
-                 const randomDirection = directions[Math.floor(Math.random() * directions.length)];
-                 const dx = randomDirection[0];
-                 const dy = randomDirection[1];
-                 const direction = randomDirection[2];
+             if (!enemy.alive) return;
+              // Calculate distance to player
+              const distanceToPlayer = Math.sqrt(
+                  Math.pow(gameState.player.gridX - enemy.gridX, 2) +
+                  Math.pow(gameState.player.gridY - enemy.gridY, 2)
+              );
 
-                 const newGridX = enemy.gridX + dx;
-                 const newGridY = enemy.gridY + dy;
+              // AI State Management
+              // If player is within detection radius and enemy is patrolling, start chasing
+              if (distanceToPlayer <= enemy.detectionRadius && enemy.state === 'patrolling') {
+                  enemy.state = 'chasing';
+                  console.log(`Enemy is now Chasing`);
+              }
+              // If player is outside the detection radius and enemy is chasing, start patrolling
+              else if (distanceToPlayer > enemy.detectionRadius && enemy.state === 'chasing') {
+                  enemy.state = 'patrolling';
+                  console.log(`Enemy is now Patrolling`);
+              }
 
-                 // Check if the target tile is valid for enemy movement (empty and within bounds)
-                 if (newGridX >= 0 && newGridX < GRID_SIZE && newGridY >= 0 && newGridY < GRID_SIZE &&
-                     gameState.gameMap[newGridY][newGridX] === TILE_EMPTY) {
+             // Calculate movement based on state
+              // Enemy Movement Based on State
+              let dx = 0, dy = 0;
+              if (enemy.state === 'patrolling') {
+                  // Patrolling: Move in current direction
+                  switch (enemy.direction) {
+                      case 'up': dy = -1; break;
+                      case 'down': dy = 1; break;
+                      case 'left': dx = -1; break;
+                      case 'right': dx = 1; break;
+                  }
 
-                     enemy.targetX = newGridX * TILE_SIZE;
-                     enemy.targetY = newGridY * TILE_SIZE;
-                     enemy.movingTo = direction;
-                     enemy.gridX = newGridX; // Update enemy grid position immediately
-                     enemy.gridY = newGridY;
+                  // Check for random direction change (to make patrolling less predictable)
+                  if (Math.random() < 0.01) { // 1% chance to change direction
+                      enemy.direction = getRandomDirection(enemy);
+                  }
+              } else if (enemy.state === 'chasing') {
+                  // Chasing: Move towards player
+                  const diffX = gameState.player.gridX - enemy.gridX;
+                  const diffY = gameState.player.gridY - enemy.gridY;
+
+                  // Try to move in the dominant direction towards the player
+                  if (Math.abs(diffX) > Math.abs(diffY)) {
+                      dx = diffX > 0 ? 1 : -1; // Move horizontally towards the player
+                  } else {
+                      dy = diffY > 0 ? 1 : -1; // Move vertically towards the player
+                  }
+              }
+
+              const newGridX = enemy.gridX + dx;
+             const newGridY = enemy.gridY + dy;
+
+             // Check if the tile ahead is blocked
+             const isBlockedAhead = newGridX < 0 || newGridX >= GRID_SIZE || newGridY < 0 || newGridY >= GRID_SIZE ||
+                 gameState.gameMap[newGridY][newGridX] === TILE_INDESTRUCTIBLE ||
+                 gameState.gameMap[newGridY][newGridX] === TILE_DESTRUCTIBLE;
+
+             if (isBlockedAhead) {
+                 // Attempt side-step if blocked
+                 let sideStepSuccessful = false;
+                 const sideDirections = enemy.state === 'chasing' ? getPrioritySideDirections(enemy) : getSideDirections(enemy.direction);
+                 for (const sideDirection of sideDirections) {
+                     let sideDx = 0, sideDy = 0;
+                     switch (sideDirection) {
+                         case 'up': sideDy = -1; break;
+                         case 'down': sideDy = 1; break;
+                         case 'left': sideDx = -1; break;
+                         case 'right': sideDx = 1; break;
+                     }
+
+                     // Check if the side tile is clear
+                     if (isValidMove(enemy, sideDx, sideDy)) {
+                         // Change direction to side-step
+                         dx = sideDx;
+                         dy = sideDy;
+                         enemy.direction = sideDirection;
+                         sideStepSuccessful = true;
+                         break;
+                     }
                  }
+
+                 // If side-step failed, fall back to basic direction change
+                 if (!sideStepSuccessful) {
+                     if (enemy.state === 'chasing') {
+                         // If chasing and blocked, try moving in the perpendicular direction if it also reduces the distance to the player
+                         const diffX = gameState.player.gridX - enemy.gridX;
+                         const diffY = gameState.player.gridY - enemy.gridY;
+
+                         if (Math.abs(diffX) > Math.abs(diffY)) { // If previously trying to move horizontally
+                             if (diffY > 0 && isValidMove(enemy, 0, 1)) { dy = 1; dx = 0; } // Try moving down
+                             else if (diffY < 0 && isValidMove(enemy, 0, -1)) { dy = -1; dx = 0; } // Try moving up
+                         } else { // If previously trying to move vertically
+                             if (diffX > 0 && isValidMove(enemy, 1, 0)) { dx = 1; dy = 0; } // Try moving right
+                             else if (diffX < 0 && isValidMove(enemy, -1, 0)) { dx = -1; dy = 0; } // Try moving left
+                         }
+                     }
+                     // If still blocked or in patrolling mode, change direction
+                     if (enemy.state === 'patrolling' || (enemy.state === 'chasing' && !isValidMove(enemy, dx, dy))) {
+                         enemy.direction = getRandomDirection(enemy);
+                     }
+
+                     if (enemy.state === 'chasing' && !isValidMove(enemy, dx, dy)) {
+                         enemy.direction = getRandomDirection(enemy);
+                         enemy.state = 'patrolling';
+                         console.log("Enemy is now Patrolling");
+                  }
+                  
+                  if (enemy.state === 'chasing' && !isValidMove(enemy, dx, dy)) {
+                          enemy.direction = getRandomDirection(enemy);
+                          enemy.state = 'patrolling';
+                      console.log("Enemy is now Patrolling");
+                  }
+                 }
+
              }
-              // Update enemy pixel position based on movement towards target
-             if (enemy.alive && enemy.movingTo) {
-                 let movedThisFrame = enemy.speed;
 
-                 if (enemy.movingTo === 'up') {
-                     enemy.y -= movedThisFrame;
+             const isBlocked = newGridX < 0 || newGridX >= GRID_SIZE || newGridY < 0 || newGridY >= GRID_SIZE ||
+                 gameState.gameMap[newGridY][newGridX] === TILE_INDESTRUCTIBLE ||
+                 gameState.gameMap[newGridY][newGridX] === TILE_DESTRUCTIBLE;
+             // Update position if not blocked
+                  enemy.targetX = newGridX * TILE_SIZE;
+                  enemy.targetY = newGridY * TILE_SIZE;
+                  enemy.gridX = newGridX; // Update grid position
+                  enemy.gridY = newGridY;
+              }
+
+             // Update enemy pixel position based on movement towards target
+             if (enemy.alive) {
+                 let movedThisFrame = enemy.speed;
+                 if (dy === -1) { // Moving up
+                     enemy.y -= movedThisFrame; // Move up
                      if (enemy.y < enemy.targetY) { enemy.y = enemy.targetY; }
-                 } else if (enemy.movingTo === 'down') {
-                     enemy.y += movedThisFrame;
-                      if (enemy.y > enemy.targetY) { enemy.y = enemy.targetY; }
-                 } else if (enemy.movingTo === 'left') {
-                     enemy.x -= movedThisFrame;
+                 } else if (dy === 1) { // Moving down
+                     enemy.y += movedThisFrame; // Move down
+                     if (enemy.y > enemy.targetY) { enemy.y = enemy.targetY; }
+                 } else if (dx === -1) { // Moving left
+                     enemy.x -= movedThisFrame; // Move left
                       if (enemy.x < enemy.targetX) { enemy.x = enemy.targetX; }
-                 } else if (enemy.movingTo === 'right') {
-                     enemy.x += movedThisFrame;
-                      if (enemy.x > enemy.targetX) { enemy.x = enemy.targetX; }
+                 } else if (dx === 1) { // Moving right
+                     enemy.x += movedThisFrame; // Move right
+                     if (enemy.x > enemy.targetX) { enemy.x = enemy.targetX; }
                  }
 
-                  // Check if target is reached and snap to grid
+                   // Draw power-ups
+                  gameState.powerups.forEach(powerup => {
+                    let powerupColor;
+                    switch (powerup.type) {
+                        case POWERUP_BOMB_RADIUS:
+                            powerupColor = 'green';
+                            break;
+                        case POWERUP_BOMB_COUNT:
+                            powerupColor = 'blue';
+                            break;
+                        case POWERUP_SPEED:
+                            powerupColor = 'yellow';
+                            break;
+                        default:
+                            powerupColor = 'white'; // Default color
+                    }
+                    ctx.fillStyle = powerupColor;
+                    ctx.fillRect(powerup.gridX * TILE_SIZE, powerup.gridY * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                });
+
+                  // Check if target is reached and update grid position
                   const tolerance = enemy.speed / 2;
                   if (Math.abs(enemy.x - enemy.targetX) < tolerance && Math.abs(enemy.y - enemy.targetY) < tolerance) {
                       enemy.x = enemy.targetX;
                       enemy.y = enemy.targetY;
+                      enemy.gridX = Math.round(enemy.x / TILE_SIZE);
+                      enemy.gridY = Math.round(enemy.y / TILE_SIZE);
                       enemy.movingTo = null;
                       // enemy.gridX and gridY were updated when setting the target
+                 }
+
+                 function getPrioritySideDirections(enemy) {
+                     // Prioritize sides closer to player's alignment (horizontal or vertical)
+                     const diffX = gameState.player.gridX - enemy.gridX;
+                     const diffY = gameState.player.gridY - enemy.gridY;
+                     const preferredSide1 = Math.abs(diffX) > Math.abs(diffY) ? (diffY > 0 ? 'down' : 'up') : (diffX > 0 ? 'right' : 'left');
+                     const preferredSide2 = Math.abs(diffX) > Math.abs(diffY) ? (diffY > 0 ? 'up' : 'down') : (diffX > 0 ? 'left' : 'right');
+
+                     return [preferredSide1, preferredSide2, ...getSideDirections(enemy.direction)];
+                 }
+
+                 function getSideDirections(currentDirection) {
+                     // Get side directions relative to the current direction
+                     switch (currentDirection) {
+                         case 'up': return ['left', 'right', 'up', 'down'];
+                         case 'down': return ['left', 'right', 'down', 'up'];
+                         case 'left': return ['up', 'down', 'left', 'right'];
+                         case 'right': return ['up', 'down', 'right', 'left'];
+                         default: return ['up', 'down', 'left', 'right'];
+                     }
+                 }
                   }
+             }
+
+             function isValidMove(enemy, dx, dy) {
+                 const newGridX = enemy.gridX + dx;
+                 const newGridY = enemy.gridY + dy;
+                 return !(newGridX < 0 || newGridX >= GRID_SIZE || newGridY < 0 || newGridY >= GRID_SIZE ||
+                     gameState.gameMap[newGridY][newGridX] === TILE_INDESTRUCTIBLE ||
+                     gameState.gameMap[newGridY][newGridX] === TILE_DESTRUCTIBLE);
+             }
+             function getRandomDirection(enemy) {
+                const directions = ['up', 'down', 'left', 'right'];
+                const randomDirection = directions[Math.floor(Math.random() * directions.length)];
+                return randomDirection;
              }
          });
     }
@@ -418,7 +679,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Draw bombs
         gameState.bombs.forEach(bomb => {
-            if (!bomb.exploded) {
+            if (bomb.state === 'active') {
                 ctx.fillStyle = '#ff0000'; // Red for bomb
                 const bombCenterX = bomb.x + TILE_SIZE / 2;
                 const bombCenterY = bomb.y + TILE_SIZE / 2;
@@ -433,9 +694,44 @@ document.addEventListener('DOMContentLoaded', async () => {
                  ctx.fillRect(bomb.x + (TILE_SIZE - indicatorSize) / 2, bomb.y + (TILE_SIZE - indicatorSize) / 2, indicatorSize, indicatorSize);
             }
         });
+        
+        // Draw explosions
+        gameState.bombs.forEach(bomb => {
+            if (bomb.state === 'exploding') {
+                // Draw center explosion tile
+                 ctx.fillStyle = '#FFA500';
+                 ctx.fillRect(bomb.gridX * TILE_SIZE, bomb.gridY * TILE_SIZE, TILE_SIZE, TILE_SIZE);
 
-         // Draw explosions
-         gameState.explosions.forEach(explosion => {
+                // Draw explosion tiles in radius
+                const explosionTiles = getExplosionTiles(bomb.gridX, bomb.gridY, bomb.power);
+                explosionTiles.forEach(tile => {
+                    ctx.fillStyle = '#FFA500';
+                    ctx.fillRect(tile.x * TILE_SIZE, tile.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                });
+            }
+        });
+
+
+        // Draw enemies
+        gameState.enemies.forEach(enemy => {
+            if (enemy.alive) {
+                ctx.fillStyle = enemy.color; // Magenta for enemy
+                const enemySize = enemy.size;
+                const enemyRenderX = enemy.x + (TILE_SIZE - enemySize) / 2;
+                const enemyRenderY = enemy.y + (TILE_SIZE - enemySize) / 2;
+                ctx.fillRect(enemyRenderX, enemyRenderY, enemySize, enemySize);
+            }
+        });
+
+        // Draw player (draw player last so they are on top of other objects)
+        if (gameState.player && gameState.player.alive) {
+            ctx.fillStyle = gameState.player.color;
+            const playerSize = gameState.player.size;
+            const playerRenderX = gameState.player.x + (TILE_SIZE - playerSize) / 2;
+            const playerRenderY = gameState.player.y + (TILE_SIZE - playerSize) / 2;
+            ctx.fillRect(playerRenderX, playerRenderY, playerSize, playerSize);
+        }
+        /* gameState.explosions.forEach(explosion => {
              ctx.fillStyle = '#FFA500'; // Orange for explosion
              ctx.fillRect(explosion.gridX * TILE_SIZE, explosion.gridY * TILE_SIZE, TILE_SIZE, TILE_SIZE); // Draw over the explosion tile
          });
@@ -450,15 +746,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                  ctx.fillRect(enemyRenderX, enemyRenderY, enemySize, enemySize);
              }
          });
-
-        // Draw player (draw player last so they are on top of other objects)
-        if (gameState.player && gameState.player.alive) {
-            ctx.fillStyle = gameState.player.color;
-             const playerSize = gameState.player.size;
-             const playerRenderX = gameState.player.x + (TILE_SIZE - playerSize) / 2;
-             const playerRenderY = gameState.player.y + (TILE_SIZE - playerSize) / 2;
-            ctx.fillRect(playerRenderX, playerRenderY, playerSize, playerSize);
-        }
+         */
 
         // Draw game over screen/message
          if (gameState.gameOver) {
@@ -469,6 +757,13 @@ document.addEventListener('DOMContentLoaded', async () => {
              ctx.textAlign = 'center';
              ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2);
          }
+         // Draw game won screen/message
+        if (gameState.gameWon) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Semi-transparent black overlay
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#00ff00'; // Green text
+            ctx.fillText('You Win!', canvas.width / 2, canvas.height / 2);
+        }
 
     }
 
@@ -594,6 +889,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                      }
                  }
              }
+         }
+         
          }
 
          gameState.gameStarted = true;
