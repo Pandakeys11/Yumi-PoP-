@@ -1,0 +1,54 @@
+body {
+    margin: 0;
+    background-color: #1a1a1a; /* Dark background */
+    color: #f0f0f0; /* Light text */
+    font-family: sans-serif; /* Placeholder font */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.game-container {
+    display: flex;
+    border: 2px solid #440000; /* Dark red border */
+    box-shadow: 0 0 20px rgba(68, 0, 0, 0.5); /* Matching shadow */
+}
+
+#gameCanvas {
+    background-color: #333; /* Placeholder canvas background */
+    display: block;
+}
+
+.ui-panel {
+    width: 300px; /* Example width */
+    padding: 20px;
+    background-color: #330000; /* Darker red/brown for UI */
+    border-left: 2px solid #440000;
+}
+
+h1 {
+    color: #ffcc00; /* Gold/yellow title */
+    text-align: center;
+}
+
+#walletConnectArea, #playerStats {
+    margin-top: 20px;
+    padding: 15px;
+    border: 1px solid #440000;
+    background-color: #220000;
+}
+
+#connectWalletButton {
+    padding: 10px;
+    background-color: #ffcc00;
+    color: #330000;
+    border: none;
+    cursor: pointer;
+    font-size: 1em;
+    margin-top: 10px;
+}
+
+#connectWalletButton:hover {
+    background-color: #ffe066;
+}
