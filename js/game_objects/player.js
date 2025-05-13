@@ -22,6 +22,24 @@ class Player {
         this.isInvincible = false; // For hit flashing
         this.invincibilityTimer = 0;
         this.invincibilityDuration = 500; // ms
+        this.sprite = new Image();
+        this.sprite.src = 'assets/sprites/player/yumi-player 1.png';
+        this.frameSize = { width: 48, height: 48 };
+        this.animations = {
+            idleDown: { row: 3, frames: [0] },
+            walkDown: { row: 3, frames: [0, 1, 2, 3] },
+            idleLeft: { row: 1, frames: [0] },
+            walkLeft: { row: 1, frames: [0, 1, 2, 3] },
+            idleRight: { row: 2, frames: [0] },
+            walkRight: { row: 2, frames: [0, 1, 2, 3] },
+            idleUp: { row: 0, frames: [0] },
+            walkUp: { row: 0, frames: [0, 1, 2, 3] }
+        };
+        this.currentAnimation = 'idleDown';
+        this.currentFrame = 0;
+        this.animationTimer = 0;
+        this.animationSpeed = 150;
+        this.facingDirection = 'down';
     }
 
     canMoveTo(gridX, gridY) {
@@ -114,44 +132,59 @@ class Player {
                 }
             }
         }
+
+        // Animation state logic
+        let animDir = this.direction;
+        if (animDir === 'up') animDir = 'Up';
+        else if (animDir === 'down') animDir = 'Down';
+        else if (animDir === 'left') animDir = 'Left';
+        else if (animDir === 'right') animDir = 'Right';
+        if (this.moving) {
+            this.currentAnimation = 'walk' + animDir;
+            this.facingDirection = this.direction;
+        } else {
+            let idleDir = this.facingDirection;
+            if (idleDir === 'up') idleDir = 'Up';
+            else if (idleDir === 'down') idleDir = 'Down';
+            else if (idleDir === 'left') idleDir = 'Left';
+            else if (idleDir === 'right') idleDir = 'Right';
+            this.currentAnimation = 'idle' + idleDir;
+        }
+        this.updateAnimation(deltaTime);
+    }
+
+    updateAnimation(deltaTime) {
+        this.animationTimer += deltaTime;
+        const anim = this.animations[this.currentAnimation];
+        if (this.animationTimer > this.animationSpeed) {
+            this.animationTimer = 0;
+            this.currentFrame = (this.currentFrame + 1) % anim.frames.length;
+        }
     }
 
     render(ctx) {
-        // Flash if invincible
         if (this.isInvincible && Math.floor(this.invincibilityTimer / 50) % 2 === 0) {
-             return; 
+            return;
         }
-        
-        // Draw player base (Yumi - Diamond/Cyan)
-        ctx.fillStyle = '#00ced1'; // Dark Turquoise / Cyan
-        ctx.fillRect(this.x, this.y, GRID_SIZE, GRID_SIZE);
-        // Inner highlight
-        ctx.fillStyle = '#40e0d0'; // Turquoise
-        ctx.fillRect(this.x + GRID_SIZE * 0.1, this.y + GRID_SIZE * 0.1, GRID_SIZE * 0.8, GRID_SIZE * 0.8);
-        
-        // Direction indicator (Brighter Cyan Arrow/Triangle?)
-        ctx.fillStyle = '#00ffff'; // Bright Cyan
-        const indicatorSize = GRID_SIZE / 3;
-        ctx.beginPath();
-        if (this.direction === 'up') {
-            ctx.moveTo(this.x + GRID_SIZE / 2, this.y + indicatorSize * 0.5);
-            ctx.lineTo(this.x + GRID_SIZE / 2 - indicatorSize / 2, this.y + indicatorSize);
-            ctx.lineTo(this.x + GRID_SIZE / 2 + indicatorSize / 2, this.y + indicatorSize);
-        } else if (this.direction === 'down') {
-            ctx.moveTo(this.x + GRID_SIZE / 2, this.y + GRID_SIZE - indicatorSize * 0.5);
-            ctx.lineTo(this.x + GRID_SIZE / 2 - indicatorSize / 2, this.y + GRID_SIZE - indicatorSize);
-            ctx.lineTo(this.x + GRID_SIZE / 2 + indicatorSize / 2, this.y + GRID_SIZE - indicatorSize);
-        } else if (this.direction === 'left') {
-             ctx.moveTo(this.x + indicatorSize * 0.5, this.y + GRID_SIZE / 2);
-             ctx.lineTo(this.x + indicatorSize, this.y + GRID_SIZE / 2 - indicatorSize / 2);
-             ctx.lineTo(this.x + indicatorSize, this.y + GRID_SIZE / 2 + indicatorSize / 2);
-        } else { // right
-             ctx.moveTo(this.x + GRID_SIZE - indicatorSize * 0.5, this.y + GRID_SIZE / 2);
-             ctx.lineTo(this.x + GRID_SIZE - indicatorSize, this.y + GRID_SIZE / 2 - indicatorSize / 2);
-             ctx.lineTo(this.x + GRID_SIZE - indicatorSize, this.y + GRID_SIZE / 2 + indicatorSize / 2);
+        if (!this.sprite.complete || this.sprite.naturalWidth === 0) {
+            return; // Don't draw if sprite not loaded
         }
-        ctx.closePath();
-        ctx.fill();
+        const anim = this.animations[this.currentAnimation];
+        const frame = anim.frames[this.currentFrame];
+        // Clamp source rectangle to sprite sheet size
+        const sx = Math.min(frame * this.frameSize.width, this.sprite.naturalWidth - this.frameSize.width);
+        const sy = Math.min(anim.row * this.frameSize.height, this.sprite.naturalHeight - this.frameSize.height);
+        ctx.drawImage(
+            this.sprite,
+            sx,
+            sy,
+            this.frameSize.width,
+            this.frameSize.height,
+            this.x,
+            this.y,
+            GRID_SIZE,
+            GRID_SIZE
+        );
     }
 
     takeDamage() {

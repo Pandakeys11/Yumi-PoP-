@@ -20,6 +20,7 @@ class Game {
             powerup: null,
             tiles: null
         };
+        this.lastFrameTime = performance.now();
         
         this.init();
     }
@@ -150,19 +151,22 @@ class Game {
     }
 
     gameLoop() {
+        const now = performance.now();
+        const deltaTime = now - this.lastFrameTime;
+        this.lastFrameTime = now;
         if (this.gameState === 'playing') {
-            this.update();
+            this.update(deltaTime);
         }
         this.render();
         requestAnimationFrame(() => this.gameLoop());
     }
 
-    update() {
+    update(deltaTime) {
         // Update player
-        this.player.update();
+        this.player.update(deltaTime);
         
         // Update enemies
-        this.enemies.forEach(enemy => enemy.update());
+        this.enemies.forEach(enemy => enemy.update(deltaTime));
         
         // Update bombs
         this.bombs.forEach(bomb => bomb.update());
