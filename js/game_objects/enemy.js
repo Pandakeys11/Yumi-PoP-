@@ -16,6 +16,48 @@ class Enemy {
         this.isInvincible = false;
         this.invincibilityTimer = 0;
         this.invincibilityDuration = 300;
+        this.sprite = new Image();
+        // Sprite selection and frame size for each type
+        if (type === 'skeleton') {
+            this.sprite.src = 'assets/sprites/player/enemy 1.png';
+            this.frameSize = { width: 192, height: 192 };
+        } else if (type === 'ghost') {
+            this.sprite.src = 'assets/sprites/player/enemy 2.png';
+            this.frameSize = { width: 192, height: 192 };
+        } else if (type === 'demon') {
+            this.sprite.src = 'assets/sprites/player/enemy 3.png';
+            this.frameSize = { width: 192, height: 192 };
+        } else if (type === 'omega') {
+            this.sprite.src = 'assets/sprites/player/omega-enemy-boss.png';
+            this.frameSize = { width: 192, height: 192 };
+        } else if (type === 'sol') {
+            this.sprite.src = 'assets/sprites/player/sol-player 4.png';
+            this.frameSize = { width: 48, height: 48 };
+        } else if (type === 'kage') {
+            this.sprite.src = 'assets/sprites/player/Kage-player 2.png';
+            this.frameSize = { width: 192, height: 192 };
+        } else if (type === 'cozy') {
+            this.sprite.src = 'assets/sprites/player/cozy-player 3.png';
+            this.frameSize = { width: 192, height: 192 };
+        } else {
+            this.sprite.src = 'assets/sprites/player/enemy 1.png';
+            this.frameSize = { width: 192, height: 192 };
+        }
+        this.animations = {
+            idleDown: { row: 0, frames: [0] },
+            walkDown: { row: 0, frames: [0, 1, 2, 3] },
+            idleLeft: { row: 1, frames: [0] },
+            walkLeft: { row: 1, frames: [0, 1, 2, 3] },
+            idleRight: { row: 2, frames: [0] },
+            walkRight: { row: 2, frames: [0, 1, 2, 3] },
+            idleUp: { row: 3, frames: [0] },
+            walkUp: { row: 3, frames: [0, 1, 2, 3] }
+        };
+        this.currentAnimation = 'idleDown';
+        this.currentFrame = 0;
+        this.animationTimer = 0;
+        this.animationSpeed = 150;
+        this.facingDirection = 'down';
     }
 
     canMoveTo(gridX, gridY) {
@@ -35,7 +77,7 @@ class Enemy {
         }
         
         if (this.moving) {
-            const moveAmount = this.speed;
+            const moveAmount = this.speed * (deltaTime / 16.67); // Normalize to 60fps
             this.moveProgress += moveAmount;
 
             if (this.moveProgress >= GRID_SIZE) {
@@ -61,45 +103,59 @@ class Enemy {
                 this.determineNextMove();
             }
         }
+
+        // Animation state logic (match player logic)
+        let animDir = this.direction;
+        if (animDir === 'up') animDir = 'Up';
+        else if (animDir === 'down') animDir = 'Down';
+        else if (animDir === 'left') animDir = 'Left';
+        else if (animDir === 'right') animDir = 'Right';
+        if (this.moving) {
+            this.currentAnimation = 'walk' + animDir;
+            this.facingDirection = this.direction;
+        } else {
+            let idleDir = this.facingDirection;
+            if (idleDir === 'up') idleDir = 'Up';
+            else if (idleDir === 'down') idleDir = 'Down';
+            else if (idleDir === 'left') idleDir = 'Left';
+            else if (idleDir === 'right') idleDir = 'Right';
+            this.currentAnimation = 'idle' + idleDir;
+        }
+        this.updateAnimation(deltaTime);
+    }
+
+    updateAnimation(deltaTime) {
+        this.animationTimer += deltaTime;
+        const anim = this.animations[this.currentAnimation];
+        if (this.animationTimer > this.animationSpeed) {
+            this.animationTimer = 0;
+            this.currentFrame = (this.currentFrame + 1) % anim.frames.length;
+        }
     }
 
     render(ctx) {
         if (this.isInvincible && Math.floor(this.invincibilityTimer / 50) % 2 === 0) {
-             return; 
+            return;
         }
-        
-        let baseColor = 'gray';
-        let detailColor = 'black';
-        switch (this.type) {
-            case 'skeleton':
-                baseColor = '#b0b0b0'; 
-                detailColor = '#707070';
-                break;
-            case 'ghost':
-                baseColor = '#e0115f';
-                detailColor = '#8b0000';
-                break;
-            case 'demon':
-                baseColor = '#2ecc71';
-                detailColor = '#1a5e39';
-                break;
+        if (!this.sprite.complete || this.sprite.naturalWidth === 0) {
+            return; // Don't draw if sprite not loaded
         }
-        
-        ctx.fillStyle = baseColor;
-        ctx.fillRect(this.x, this.y, GRID_SIZE, GRID_SIZE);
-        
-        ctx.fillStyle = detailColor;
-        ctx.fillRect(this.x + GRID_SIZE*0.2, this.y + GRID_SIZE*0.2, GRID_SIZE*0.6, GRID_SIZE*0.6);
-
-        ctx.fillStyle = 'white';
-        const eyeSize = GRID_SIZE / 5;
-        let ex = this.x + GRID_SIZE / 2 - eyeSize / 2;
-        let ey = this.y + GRID_SIZE / 2 - eyeSize / 2;
-        if (this.direction === 'up') ey -= GRID_SIZE / 3;
-        else if (this.direction === 'down') ey += GRID_SIZE / 3;
-        else if (this.direction === 'left') ex -= GRID_SIZE / 3;
-        else if (this.direction === 'right') ex += GRID_SIZE / 3;
-        ctx.fillRect(ex, ey, eyeSize, eyeSize);
+        const anim = this.animations[this.currentAnimation];
+        const frame = anim.frames[this.currentFrame];
+        // Clamp source rectangle to sprite sheet size
+        const sx = Math.min(frame * this.frameSize.width, this.sprite.naturalWidth - this.frameSize.width);
+        const sy = Math.min(anim.row * this.frameSize.height, this.sprite.naturalHeight - this.frameSize.height);
+        ctx.drawImage(
+            this.sprite,
+            sx,
+            sy,
+            this.frameSize.width,
+            this.frameSize.height,
+            this.x,
+            this.y,
+            GRID_SIZE,
+            GRID_SIZE
+        );
     }
 
     determineNextMove() {
